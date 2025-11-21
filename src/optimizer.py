@@ -88,21 +88,23 @@ class SteepestDescentOptimizer(nn.Module):
         L = out_h * out_w
 
         # Ensure label_maps are shaped (N,1,H_label,W_label)
-        labels = self._ensure_label_shape(label_maps).to(device=device, dtype=dtype)
+        labels = label_maps.to(device=device, dtype=dtype)
         
-        # Remove extra singleton dimensions but keep it 4D (N,C,H,W)
-        while labels.dim() > 4:
-            # Find and squeeze out singleton dims between batch and spatial dims
-            if labels.shape[2] == 1:
-                labels = labels.squeeze(2)
-            else:
-                break
+        # Squeeze all extra singleton dimensions to get to 4D or less
+        # Target: (N, C, H, W) where C should be 1
+        labels = labels.squeeze()
         
-        # Ensure we have exactly 4 dimensions (N,C,H,W)
-        if labels.dim() == 3:
-            labels = labels.unsqueeze(1)  # Add channel dim: (N,H,W) -> (N,1,H,W)
-        elif labels.dim() != 4:
-            raise ValueError(f"labels must be 4D (N,C,H,W). Got shape {tuple(labels.shape)}")
+        # Now rebuild to exactly 4D: (N, 1, H, W)
+        if labels.dim() == 2:  # (H, W)
+            labels = labels.unsqueeze(0).unsqueeze(0)  # -> (1, 1, H, W)
+        elif labels.dim() == 3:  # (N, H, W)
+            labels = labels.unsqueeze(1)  # -> (N, 1, H, W)
+        elif labels.dim() == 4:  # (N, C, H, W)
+            if labels.shape[1] != 1:
+                # Take only first channel if multiple channels present
+                labels = labels[:, 0:1, :, :]
+        else:
+            raise ValueError(f"labels has unexpected dimensions after squeeze: {labels.shape}")
 
         # Mask
         if mask is None:
@@ -110,13 +112,14 @@ class SteepestDescentOptimizer(nn.Module):
         else:
             mask = mask.to(device=device, dtype=dtype)
             # Apply same dimension normalization to mask
-            while mask.dim() > 4:
-                if mask.shape[2] == 1:
-                    mask = mask.squeeze(2)
-                else:
-                    break
-            if mask.dim() == 3:
+            mask = mask.squeeze()
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            elif mask.dim() == 3:
                 mask = mask.unsqueeze(1)
+            elif mask.dim() == 4:
+                if mask.shape[1] != 1:
+                    mask = mask[:, 0:1, :, :]
 
         # ------ Resize labels and mask to (out_h, out_w) ------
         H_label, W_label = labels.shape[-2], labels.shape[-1]
