@@ -26,7 +26,7 @@ from src.regression import (
     label_pdf_box_gaussian,
     mc_kl_loss
 )
-from msrc.iou_head import cxcywh_to_x1y1x2y2
+from src.iou_head import cxcywh_to_x1y1x2y2
 
 
 # -------------------------------------------------------------
