@@ -81,104 +81,104 @@ class SteepestDescentOptimizer(nn.Module):
         Returns:
             List of filters [w0, w1, ..., wT] each of shape (1, C, k, k)
         """
-        device = feat_samples.device
-        dtype = feat_samples.dtype
+            device = feat_samples.device
+            dtype = feat_samples.dtype
 
-        # Basic checks
-        assert w_init.ndim == 4, "w_init must be (1, C, k, k)"
-        N, C, H_feat, W_feat = feat_samples.shape
-        assert C == self.in_channels, f"feat_samples channels {C} != in_channels {self.in_channels}"
+            # Basic checks
+            assert w_init.ndim == 4, "w_init must be (1, C, k, k)"
+            N, C, H_feat, W_feat = feat_samples.shape
+            assert C == self.in_channels, f"feat_samples channels {C} != in_channels {self.in_channels}"
 
-        # Ensure labels shaped (N,1,H_label,W_label) -> convert to device/dtype
-        labels = self._ensure_label_shape(label_maps).to(dtype=dtype, device=device)  # (N,1,H_label,W_label)
+            # Ensure labels shaped (N,1,H_label,W_label) -> convert to device/dtype
+            labels = self._ensure_label_shape(label_maps).to(dtype=dtype, device=device)  # (N,1,H_label,W_label)
 
-        # If mask not provided, use ones (match labels shape initially)
-        if mask is None:
-            mask = torch.ones_like(labels, device=device, dtype=dtype)
-        else:
-            mask = mask.to(dtype=dtype, device=device)
-
-        # If label spatial size does not match feature grid (H_feat,W_feat), resize labels & mask
-        H_label, W_label = labels.shape[-2], labels.shape[-1]
-        if (H_label != H_feat) or (W_label != W_feat):
-            # resize to (H_feat, W_feat). Use bilinear for soft heatmaps; align_corners=False for stability.
-            labels = F.interpolate(labels, size=(H_feat, W_feat), mode='bilinear', align_corners=False)
-            mask = F.interpolate(mask, size=(H_feat, W_feat), mode='bilinear', align_corners=False)
-            # If labels represent a probability map, renormalize per sample so sums to 1
-            lab_flat = labels.view(N, -1)
-            lab_sum = lab_flat.sum(dim=1, keepdim=True)
-            lab_sum = lab_sum + (lab_sum == 0.).float()  # avoid zeros
-            labels = (lab_flat / lab_sum).view(N, 1, H_feat, W_feat)
-
-        # Unify shapes and flatten labels/mask
-        labels_flat = labels.view(N, -1)  # (N, L)
-        mask_flat = mask.view(N, -1)      # (N, L)
-
-        # Precompute unfolded feature patches for efficient gradient and Hv computations.
-        pad = self.filter_size // 2
-        feat_unf = F.unfold(feat_samples, kernel_size=self.filter_size, padding=pad)  # (N, C*k*k, L)
-        N2, CK2, L = feat_unf.shape
-        assert N2 == N, "Unfolded batch size mismatch"
-
-        # Transpose to (N, L, C*k*k)
-        feat_unf_t = feat_unf.transpose(1, 2).contiguous()  # (N, L, CK2)
-
-        # Convert initial filter to vector form
-        w = w_init.clone().to(device=device, dtype=dtype)  # (1, C, k, k)
-        w_vec = w.view(1, -1)  # (1, CK2)
-
-        iterates = [w.clone()]
-
-        # Preconditioner expansion
-        if self.precond is not None:
-            pc = self.precond.view(1, -1).repeat(1, self.filter_size * self.filter_size)  # (1, CK2)
-        else:
-            pc = None
-
-        # Main loop
-        for it in range(self.n_iter):
-            # compute score maps s_flat (N, L)
-            w_vec_n = w_vec.expand(N, -1)  # (N, CK2)
-            s_flat = torch.bmm(feat_unf_t, w_vec_n.unsqueeze(2)).squeeze(2)  # (N, L)
-
-            # residuals
-            resid = mask_flat * (s_flat - labels_flat)  # (N, L)
-
-            # gradient: feat_unf (N, CK2, L) * resid (N, L) -> (N, CK2), sum over L
-            resid_exp = resid.unsqueeze(1)  # (N,1,L)
-            grad_vec = torch.bmm(feat_unf, resid_exp.transpose(1, 2)).squeeze(2)  # (N, CK2)
-            grad_vec_sum = grad_vec.sum(dim=0, keepdim=True) / max(1, N)  # (1, CK2)
-            grad_vec_sum = grad_vec_sum + self.reg_lambda * w_vec  # regularization
-
-            # numerator
-            grad_flat = grad_vec_sum.view(-1)
-            numer = (grad_flat * grad_flat).sum()
-
-            # approximate Hv
-            grad_for_bmm = grad_vec_sum.t().unsqueeze(0).expand(N, -1, -1)  # (N, CK2, 1)
-            h = torch.bmm(feat_unf_t, grad_for_bmm).squeeze(2)  # (N, L)
-
-            h_exp = h.unsqueeze(1)  # (N,1,L)
-            Hv_per_sample = torch.bmm(feat_unf, h_exp.transpose(1, 2)).squeeze(2)  # (N, CK2)
-            Hv = Hv_per_sample.sum(dim=0, keepdim=True) / max(1, N)  # (1, CK2)
-            Hv = Hv + self.reg_lambda * w_vec
-
-            denom = (grad_vec_sum.view(-1) * Hv.view(-1)).sum() + self.eps
-            alpha = numer / denom
-            if not torch.isfinite(alpha):
-                alpha = torch.tensor(0.0, device=device, dtype=dtype)
-
-            # preconditioning
-            if pc is not None:
-                grad_update = grad_vec_sum / pc
+            # If mask not provided, use ones (match labels shape initially)
+            if mask is None:
+                mask = torch.ones_like(labels, device=device, dtype=dtype)
             else:
-                grad_update = grad_vec_sum
+                mask = mask.to(dtype=dtype, device=device)
 
-            # update
-            w_vec = w_vec - alpha.view(1, 1) * grad_update
-            w = w_vec.view(1, C, self.filter_size, self.filter_size).clone()
-            iterates.append(w.clone())
+            # If label spatial size does not match feature grid (H_feat,W_feat), resize labels & mask
+            H_label, W_label = labels.shape[-2], labels.shape[-1]
+            if (H_label != H_feat) or (W_label != W_feat):
+                # resize to (H_feat, W_feat). Use bilinear for soft heatmaps; align_corners=False for stability.
+                labels = F.interpolate(labels, size=(H_feat, W_feat), mode='bilinear', align_corners=False)
+                mask = F.interpolate(mask, size=(H_feat, W_feat), mode='bilinear', align_corners=False)
+                # If labels represent a probability map, renormalize per sample so sums to 1
+                lab_flat = labels.view(N, -1)
+                lab_sum = lab_flat.sum(dim=1, keepdim=True)
+                lab_sum = lab_sum + (lab_sum == 0.).float()  # avoid zeros
+                labels = (lab_flat / lab_sum).view(N, 1, H_feat, W_feat)
 
-        return iterates
+            # Unify shapes and flatten labels/mask
+            labels_flat = labels.view(N, -1)  # (N, L)
+            mask_flat = mask.view(N, -1)      # (N, L)
+
+            # Precompute unfolded feature patches for efficient gradient and Hv computations.
+            pad = self.filter_size // 2
+            feat_unf = F.unfold(feat_samples, kernel_size=self.filter_size, padding=pad)  # (N, C*k*k, L)
+            N2, CK2, L = feat_unf.shape
+            assert N2 == N, "Unfolded batch size mismatch"
+
+            # Transpose to (N, L, C*k*k)
+            feat_unf_t = feat_unf.transpose(1, 2).contiguous()  # (N, L, CK2)
+
+            # Convert initial filter to vector form
+            w = w_init.clone().to(device=device, dtype=dtype)  # (1, C, k, k)
+            w_vec = w.view(1, -1)  # (1, CK2)
+
+            iterates = [w.clone()]
+
+            # Preconditioner expansion
+            if self.precond is not None:
+                pc = self.precond.view(1, -1).repeat(1, self.filter_size * self.filter_size)  # (1, CK2)
+            else:
+                pc = None
+
+            # Main loop
+            for it in range(self.n_iter):
+                # compute score maps s_flat (N, L)
+                w_vec_n = w_vec.expand(N, -1)  # (N, CK2)
+                s_flat = torch.bmm(feat_unf_t, w_vec_n.unsqueeze(2)).squeeze(2)  # (N, L)
+
+                # residuals
+                resid = mask_flat * (s_flat - labels_flat)  # (N, L)
+
+                # gradient: feat_unf (N, CK2, L) * resid (N, L) -> (N, CK2), sum over L
+                resid_exp = resid.unsqueeze(1)  # (N,1,L)
+                grad_vec = torch.bmm(feat_unf, resid_exp.transpose(1, 2)).squeeze(2)  # (N, CK2)
+                grad_vec_sum = grad_vec.sum(dim=0, keepdim=True) / max(1, N)  # (1, CK2)
+                grad_vec_sum = grad_vec_sum + self.reg_lambda * w_vec  # regularization
+
+                # numerator
+                grad_flat = grad_vec_sum.view(-1)
+                numer = (grad_flat * grad_flat).sum()
+
+                # approximate Hv
+                grad_for_bmm = grad_vec_sum.t().unsqueeze(0).expand(N, -1, -1)  # (N, CK2, 1)
+                h = torch.bmm(feat_unf_t, grad_for_bmm).squeeze(2)  # (N, L)
+
+                h_exp = h.unsqueeze(1)  # (N,1,L)
+                Hv_per_sample = torch.bmm(feat_unf, h_exp.transpose(1, 2)).squeeze(2)  # (N, CK2)
+                Hv = Hv_per_sample.sum(dim=0, keepdim=True) / max(1, N)  # (1, CK2)
+                Hv = Hv + self.reg_lambda * w_vec
+
+                denom = (grad_vec_sum.view(-1) * Hv.view(-1)).sum() + self.eps
+                alpha = numer / denom
+                if not torch.isfinite(alpha):
+                    alpha = torch.tensor(0.0, device=device, dtype=dtype)
+
+                # preconditioning
+                if pc is not None:
+                    grad_update = grad_vec_sum / pc
+                else:
+                    grad_update = grad_vec_sum
+
+                # update
+                w_vec = w_vec - alpha.view(1, 1) * grad_update
+                w = w_vec.view(1, C, self.filter_size, self.filter_size).clone()
+                iterates.append(w.clone())
+
+            return iterates
 
 
