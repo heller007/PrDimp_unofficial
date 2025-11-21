@@ -19,14 +19,14 @@ import numpy as np
 from typing import Tuple
 from PIL import Image
 
-from models.prdimp.prdimp50 import PrDiMP50
+from prdimp50 import PrDiMP50
 from torchvision.transforms.functional import to_tensor, to_pil_image
-from models.probabilistic.regression import (
+from src.regression import (
     sample_gaussian_boxes,
     label_pdf_box_gaussian,
     mc_kl_loss
 )
-from models.heads.iou_head import cxcywh_to_x1y1x2y2
+from msrc.iou_head import cxcywh_to_x1y1x2y2
 
 
 # -------------------------------------------------------------
