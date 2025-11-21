@@ -69,7 +69,7 @@ class SteepestDescentOptimizer(nn.Module):
             feat_samples: torch.Tensor,
             label_maps: torch.Tensor,
             mask: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
-        """
+    """
         Run optimizer.
 
         Args:
@@ -107,8 +107,7 @@ class SteepestDescentOptimizer(nn.Module):
             # If labels represent a probability map, renormalize per sample so sums to 1
             lab_flat = labels.view(N, -1)
             lab_sum = lab_flat.sum(dim=1, keepdim=True)
-            # avoid divide-by-zero
-            lab_sum = lab_sum + (lab_sum == 0.).float()
+            lab_sum = lab_sum + (lab_sum == 0.).float()  # avoid zeros
             labels = (lab_flat / lab_sum).view(N, 1, H_feat, W_feat)
 
         # Unify shapes and flatten labels/mask
@@ -181,4 +180,5 @@ class SteepestDescentOptimizer(nn.Module):
             iterates.append(w.clone())
 
         return iterates
+
 
