@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from models.prdimp.prdimp50 import PrDiMP50
+from prdimp50 import PrDiMP50
 from data.got10k_dataset import GOT10kTrainDataset, got10k_collate
 
 
