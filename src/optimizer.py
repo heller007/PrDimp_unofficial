@@ -89,14 +89,36 @@ class SteepestDescentOptimizer(nn.Module):
 
         # Ensure label_maps are shaped (N,1,H_label,W_label)
         labels = self._ensure_label_shape(label_maps).to(device=device, dtype=dtype)
+        
+        # Remove extra singleton dimensions but keep it 4D (N,C,H,W)
+        while labels.dim() > 4:
+            # Find and squeeze out singleton dims between batch and spatial dims
+            if labels.shape[2] == 1:
+                labels = labels.squeeze(2)
+            else:
+                break
+        
+        # Ensure we have exactly 4 dimensions (N,C,H,W)
+        if labels.dim() == 3:
+            labels = labels.unsqueeze(1)  # Add channel dim: (N,H,W) -> (N,1,H,W)
+        elif labels.dim() != 4:
+            raise ValueError(f"labels must be 4D (N,C,H,W). Got shape {tuple(labels.shape)}")
 
         # Mask
         if mask is None:
             mask = torch.ones_like(labels, device=device, dtype=dtype)
         else:
             mask = mask.to(device=device, dtype=dtype)
+            # Apply same dimension normalization to mask
+            while mask.dim() > 4:
+                if mask.shape[2] == 1:
+                    mask = mask.squeeze(2)
+                else:
+                    break
+            if mask.dim() == 3:
+                mask = mask.unsqueeze(1)
 
-        # ------ FIX: Resize labels and mask to (out_h, out_w) ------
+        # ------ Resize labels and mask to (out_h, out_w) ------
         H_label, W_label = labels.shape[-2], labels.shape[-1]
         if (H_label != out_h) or (W_label != out_w):
             labels = F.interpolate(labels, size=(out_h, out_w), mode="bilinear", align_corners=False)

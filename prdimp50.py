@@ -152,6 +152,17 @@ class PrDiMP50(nn.Module):
             template_label_maps: (N,1,Hf,Wf)
             search_gt_boxes: (B,4) in center format (cx,cy,w,h)
         """
+        # At the start of forward_train(...) in prdimp50.py
+        # Ensure template_label_maps is 4D: (N,1,H,W)
+        if template_label_maps is not None:
+            # move to same dtype/device as features when needed by caller later
+            while template_label_maps.dim() > 4:
+                template_label_maps = template_label_maps.squeeze(2)
+            if template_label_maps.dim() == 3:
+                template_label_maps = template_label_maps.unsqueeze(1)
+            # final assert for dev/debug
+            assert template_label_maps.dim() == 4, f"template_label_maps must be 4D (N,1,H,W); got {tuple(template_label_maps.shape)}"
+
         # FIX: label maps must be 4D (N,1,H,W)
         if template_label_maps.dim() == 5:
             # remove middle singular dims until 4D
