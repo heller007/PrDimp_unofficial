@@ -24,8 +24,8 @@ import numpy as np
 # - ModelInitializer is used only offline; for online we use the optimizer warm-start
 # - SteepestDescentOptimizer exists at models.predictor.optimizer
 # - helper crop_and_resize is available (copied from your tracker)
-from models.predictor.optimizer import SteepestDescentOptimizer
-from models.probabilistic.regression import sample_gaussian_boxes, label_pdf_box_gaussian
+from src.optimizer import SteepestDescentOptimizer
+from src.regression import sample_gaussian_boxes, label_pdf_box_gaussian
 from torchvision.transforms.functional import to_tensor
 from PIL import Image
 
