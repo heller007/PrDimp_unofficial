@@ -69,17 +69,17 @@ class SteepestDescentOptimizer(nn.Module):
             feat_samples: torch.Tensor,
             label_maps: torch.Tensor,
             mask: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
-    """
-        Run optimizer.
+        """
+            Run optimizer.
 
-        Args:
-            w_init: (1, C, k, k) initial filter
-            feat_samples: (N, C, H, W) classification features from templates
-            label_maps: (N, 1, H_label, W_label) label maps (e.g., gaussian target maps)
-            mask: optional (N, 1, H_label, W_label) spatial weights (same shape as label_maps); if None, ones used.
+            Args:
+                w_init: (1, C, k, k) initial filter
+                feat_samples: (N, C, H, W) classification features from templates
+                label_maps: (N, 1, H_label, W_label) label maps (e.g., gaussian target maps)
+                mask: optional (N, 1, H_label, W_label) spatial weights (same shape as label_maps); if None, ones used.
 
-        Returns:
-            List of filters [w0, w1, ..., wT] each of shape (1, C, k, k)
+            Returns:
+                List of filters [w0, w1, ..., wT] each of shape (1, C, k, k)
         """
             device = feat_samples.device
             dtype = feat_samples.dtype
