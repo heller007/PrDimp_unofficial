@@ -21,12 +21,12 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 # Components
-from models.backbone.resnet50 import ResNet50Backbone
-from models.heads.cls_feature_head import ClassificationFeatureHead
-from models.predictor.initializer import ModelInitializer
-from models.predictor.optimizer import SteepestDescentOptimizer
-from models.heads.iou_head import IoUHead
-from models.probabilistic.regression import (
+from src.resnet50 import ResNet50Backbone
+from src.cls_feature_head import ClassificationFeatureHead
+from src.initializer import ModelInitializer
+from src.optimizer import SteepestDescentOptimizer
+from src.iou_head import IoUHead
+from src.regression import (
     grid_density_from_scores, 
     kl_loss_grid,
     sample_gaussian_boxes,

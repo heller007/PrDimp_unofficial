@@ -19,8 +19,8 @@ from tqdm import tqdm
 from PIL import Image
 
 import torch
-from models.prdimp.prdimp50 import PrDiMP50
-from tracking.prdimp_tracker import PrDiMPTracker
+from prdimp50 import PrDiMP50
+from prdimp_tracker import PrDiMPTracker
 from data.got10k_dataset import GOT10kSequence
 
 
