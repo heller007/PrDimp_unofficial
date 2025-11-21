@@ -20,7 +20,6 @@ from typing import Optional, List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 
 class SteepestDescentOptimizer(nn.Module):
@@ -89,26 +88,37 @@ class SteepestDescentOptimizer(nn.Module):
 
         def _reshape_to_n1hw(tensor: torch.Tensor, name: str) -> torch.Tensor:
             tensor = tensor.to(device=device, dtype=dtype)
-            if tensor.dim() < 2:
-                raise ValueError(f"{name} must have at least 2 dims, got {tensor.shape}")
-            H, W = tensor.shape[-2], tensor.shape[-1]
-            leading = tensor.shape[:-2]
-            if len(leading) == 0:
-                batch, channel = 1, 1
-                tensor = tensor.reshape(1, 1, H, W)
-            else:
-                batch = leading[0]
-                channel = int(math.prod(leading[1:])) if len(leading) > 1 else 1
-                tensor = tensor.reshape(batch, channel, H, W)
+
+            # Iteratively squeeze singleton dims (except batch) until ≤4 dims
+            while tensor.dim() > 4:
+                squeezed = False
+                for dim in range(1, tensor.dim()):
+                    if tensor.size(dim) == 1:
+                        tensor = tensor.squeeze(dim)
+                        squeezed = True
+                        break
+                if not squeezed:
+                    raise ValueError(f"{name} shape {tuple(tensor.shape)} cannot be reduced to 4D (N,1,H,W)")
+
+            if tensor.dim() == 2:            # (H,W)
+                tensor = tensor.unsqueeze(0).unsqueeze(0)
+            elif tensor.dim() == 3:          # (N,H,W)
+                tensor = tensor.unsqueeze(1)
+            elif tensor.dim() != 4:
+                raise ValueError(f"{name} must become 4D after squeezing; got {tuple(tensor.shape)}")
+
+            if tensor.size(1) != 1:
+                tensor = tensor[:, :1]
+
+            batch = tensor.size(0)
             if batch != N:
                 if batch == 1:
-                    tensor = tensor.expand(N, channel, H, W)
+                    tensor = tensor.expand(N, -1, -1, -1)
                 else:
-                    raise ValueError(f"{name} batch ({batch}) != features batch ({N})")
-            if channel != 1:
-                tensor = tensor[:, :1]
-            return tensor.contiguous()
+                    raise ValueError(f"{name} batch {batch} != feature batch {N}")
 
+            return tensor.contiguous()
+        
         labels = _reshape_to_n1hw(label_maps, "labels")
 
         if mask is None:
