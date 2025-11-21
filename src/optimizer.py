@@ -70,123 +70,95 @@ class SteepestDescentOptimizer(nn.Module):
             label_maps: torch.Tensor,
             mask: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
         """
-        Run optimizer.
-
-        Args:
-            w_init: (1, C, k, k) initial filter
-            feat_samples: (N, C, H, W) classification features from templates
-            label_maps: (N, 1, H_label, W_label) label maps (e.g., gaussian target maps)
-            mask: optional (N, 1, H_label, W_label) spatial weights (same shape as label_maps); if None, ones used.
-
-        Returns:
-            List of filters [w0, w1, ..., wT] each of shape (1, C, k, k)
+        Steepest descent optimizer used in DiMP/PrDiMP.
+        This version includes correct label/mask resizing to match unfold grid.
         """
+
         device = feat_samples.device
-        dtype = feat_samples.dtype
+        dtype  = feat_samples.dtype
 
-        # Basic checks
-        assert w_init.ndim == 4, "w_init must be (1, C, k, k)"
+        # Basic shapes
         N, C, H_feat, W_feat = feat_samples.shape
-        assert C == self.in_channels, f"feat_samples channels {C} != in_channels {self.in_channels}"
+        k = self.filter_size
+        pad = k // 2
 
-        # Ensure labels shaped (N,1,H_label,W_label) -> convert to device/dtype
-        labels = self._ensure_label_shape(label_maps).to(dtype=dtype, device=device)  # (N,1,H_label,W_label)
+        # compute unfolded output spatial size
+        out_h = H_feat + 2*pad - k + 1
+        out_w = W_feat + 2*pad - k + 1
+        L = out_h * out_w
 
-        # If mask not provided, use ones (match labels shape initially)
+        # Ensure label_maps are shaped (N,1,H_label,W_label)
+        labels = self._ensure_label_shape(label_maps).to(device=device, dtype=dtype)
+
+        # Mask
         if mask is None:
             mask = torch.ones_like(labels, device=device, dtype=dtype)
         else:
-            mask = mask.to(dtype=dtype, device=device)
+            mask = mask.to(device=device, dtype=dtype)
 
-            # If label spatial size does not match the expected unfolded grid, resize labels & mask
-            H_label, W_label = labels.shape[-2], labels.shape[-1]
+        # ------ FIX: Resize labels and mask to (out_h, out_w) ------
+        H_label, W_label = labels.shape[-2], labels.shape[-1]
+        if (H_label != out_h) or (W_label != out_w):
+            labels = F.interpolate(labels, size=(out_h, out_w), mode="bilinear", align_corners=False)
+            mask   = F.interpolate(mask,   size=(out_h, out_w), mode="bilinear", align_corners=False)
 
-            # compute unfold output spatial size (number of locations L) for the given filter_size & padding used below
-            pad = self.filter_size // 2
-            # output spatial dims produced by F.unfold with stride=1
-            out_h = H_feat + 2 * pad - self.filter_size + 1
-            out_w = W_feat + 2 * pad - self.filter_size + 1
+            # Renormalize labels if they are PDFs
+            flat = labels.view(N, -1)
+            s = flat.sum(dim=1, keepdim=True)
+            s = s + (s == 0).float()  # avoid /0
+            labels = (flat / s).view(N, 1, out_h, out_w)
 
-            # If the provided label maps are not already the unfolded spatial size, resize them to (out_h, out_w)
-            if (H_label != out_h) or (W_label != out_w):
-                # Resize by bilinear (labels are soft heatmaps); align_corners=False for stability
-                labels = F.interpolate(labels, size=(out_h, out_w), mode='bilinear', align_corners=False)
-                mask = F.interpolate(mask, size=(out_h, out_w), mode='bilinear', align_corners=False)
+        # Now create the flattened versions
+        labels_flat = labels.view(N, L)  # (N, L)
+        mask_flat   = mask.view(N, L)    # (N, L)
 
-                # If labels represent a probability map, renormalize per sample so sums to 1
-                lab_flat = labels.view(N, -1)
-                lab_sum = lab_flat.sum(dim=1, keepdim=True)
-                # avoid divide-by-zero
-                lab_sum = lab_sum + (lab_sum == 0.).float()
-                labels = (lab_flat / lab_sum).view(N, 1, out_h, out_w)
+        # Unfold features
+        feat_unf = F.unfold(feat_samples, kernel_size=k, padding=pad)  # (N, CK2, L)
+        _, CK2, L_unf = feat_unf.shape
+        assert L_unf == L, f"L mismatch: unfold produced {L_unf}, expected {L}"
 
-            # Now flatten labels/mask (their flattened length L matches unfold L)
-            labels_flat = labels.view(N, -1)  # (N, L)
-            mask_flat = mask.view(N, -1)      # (N, L)
-
-        # Precompute unfolded feature patches for efficient gradient and Hv computations.
-        pad = self.filter_size // 2
-        feat_unf = F.unfold(feat_samples, kernel_size=self.filter_size, padding=pad)  # (N, C*k*k, L)
-        N2, CK2, L = feat_unf.shape
-        assert N2 == N, "Unfolded batch size mismatch"
-
-        # Transpose to (N, L, C*k*k)
         feat_unf_t = feat_unf.transpose(1, 2).contiguous()  # (N, L, CK2)
 
-        # Convert initial filter to vector form
-        w = w_init.clone().to(device=device, dtype=dtype)  # (1, C, k, k)
+        # Initialize w
+        w = w_init.to(device=device, dtype=dtype)
         w_vec = w.view(1, -1)  # (1, CK2)
 
         iterates = [w.clone()]
 
-        # Preconditioner expansion
-        if self.precond is not None:
-            pc = self.precond.view(1, -1).repeat(1, self.filter_size * self.filter_size)  # (1, CK2)
-        else:
-            pc = None
-
-        # Main loop
         for it in range(self.n_iter):
-            # compute score maps s_flat (N, L)
-            w_vec_n = w_vec.expand(N, -1)  # (N, CK2)
-            s_flat = torch.bmm(feat_unf_t, w_vec_n.unsqueeze(2)).squeeze(2)  # (N, L)
 
-            # residuals
-            resid = mask_flat * (s_flat - labels_flat)  # (N, L)
+            # score = X @ w
+            w_vec_n = w_vec.expand(N, -1)              # (N, CK2)
+            s_flat  = torch.bmm(feat_unf_t, w_vec_n.unsqueeze(2)).squeeze(2)  # (N, L)
 
-            # gradient: feat_unf (N, CK2, L) * resid (N, L) -> (N, CK2), sum over L
-            resid_exp = resid.unsqueeze(1)  # (N,1,L)
-            grad_vec = torch.bmm(feat_unf, resid_exp.transpose(1, 2)).squeeze(2)  # (N, CK2)
-            grad_vec_sum = grad_vec.sum(dim=0, keepdim=True) / max(1, N)  # (1, CK2)
-            grad_vec_sum = grad_vec_sum + self.reg_lambda * w_vec  # regularization
+            # residual
+            resid = mask_flat * (s_flat - labels_flat)    # (N, L)
+
+            # gradient = X^T (resid)
+            resid_exp = resid.unsqueeze(1)      # (N,1,L)
+            grad_vec = torch.bmm(feat_unf, resid_exp.transpose(1,2)).squeeze(2)  # (N, CK2)
+            grad_vec = grad_vec.mean(dim=0, keepdim=True)                         # (1, CK2)
+            grad_vec = grad_vec + self.reg_lambda * w_vec
 
             # numerator
-            grad_flat = grad_vec_sum.view(-1)
-            numer = (grad_flat * grad_flat).sum()
+            numer = (grad_vec.view(-1)**2).sum()
 
-            # approximate Hv
-            grad_for_bmm = grad_vec_sum.t().unsqueeze(0).expand(N, -1, -1)  # (N, CK2, 1)
-            h = torch.bmm(feat_unf_t, grad_for_bmm).squeeze(2)  # (N, L)
-
-            h_exp = h.unsqueeze(1)  # (N,1,L)
-            Hv_per_sample = torch.bmm(feat_unf, h_exp.transpose(1, 2)).squeeze(2)  # (N, CK2)
-            Hv = Hv_per_sample.sum(dim=0, keepdim=True) / max(1, N)  # (1, CK2)
+            # approximate Hessian-vector product
+            gv = grad_vec.t().unsqueeze(0).expand(N, -1, -1)   # (N,CK2,1)
+            h = torch.bmm(feat_unf_t, gv).squeeze(2)           # (N,L)
+            h_exp = h.unsqueeze(1)                             # (N,1,L)
+            Hv = torch.bmm(feat_unf, h_exp.transpose(1,2)).squeeze(2)  # (N,CK2)
+            Hv = Hv.mean(dim=0, keepdim=True)
             Hv = Hv + self.reg_lambda * w_vec
 
-            denom = (grad_vec_sum.view(-1) * Hv.view(-1)).sum() + self.eps
+            denom = (grad_vec.view(-1) * Hv.view(-1)).sum() + self.eps
             alpha = numer / denom
             if not torch.isfinite(alpha):
                 alpha = torch.tensor(0.0, device=device, dtype=dtype)
 
-            # preconditioning
-            if pc is not None:
-                grad_update = grad_vec_sum / pc
-            else:
-                grad_update = grad_vec_sum
-
             # update
-            w_vec = w_vec - alpha.view(1, 1) * grad_update
-            w = w_vec.view(1, C, self.filter_size, self.filter_size).clone()
+            w_vec = w_vec - alpha * grad_vec
+            w = w_vec.view(1, C, k, k).clone()
             iterates.append(w.clone())
 
         return iterates
