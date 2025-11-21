@@ -152,6 +152,11 @@ class PrDiMP50(nn.Module):
             template_label_maps: (N,1,Hf,Wf)
             search_gt_boxes: (B,4) in center format (cx,cy,w,h)
         """
+        # FIX: label maps must be 4D (N,1,H,W)
+        if template_label_maps.dim() == 5:
+            # remove middle singular dims until 4D
+            while template_label_maps.dim() > 4:
+                template_label_maps = template_label_maps.squeeze(2)
 
         # 1. Extract classification features
         tpl_feat = self.extract_classification_features(template_images)   # (N, C, Hf, Wf)
