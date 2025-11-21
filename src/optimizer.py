@@ -87,39 +87,34 @@ class SteepestDescentOptimizer(nn.Module):
         out_w = W_feat + 2*pad - k + 1
         L = out_h * out_w
 
-        # Ensure label_maps are shaped (N,1,H_label,W_label)
-        labels = label_maps.to(device=device, dtype=dtype)
-        
-        # Squeeze all extra singleton dimensions to get to 4D or less
-        # Target: (N, C, H, W) where C should be 1
-        labels = labels.squeeze()
-        
-        # Now rebuild to exactly 4D: (N, 1, H, W)
-        if labels.dim() == 2:  # (H, W)
-            labels = labels.unsqueeze(0).unsqueeze(0)  # -> (1, 1, H, W)
-        elif labels.dim() == 3:  # (N, H, W)
-            labels = labels.unsqueeze(1)  # -> (N, 1, H, W)
-        elif labels.dim() == 4:  # (N, C, H, W)
-            if labels.shape[1] != 1:
-                # Take only first channel if multiple channels present
-                labels = labels[:, 0:1, :, :]
-        else:
-            raise ValueError(f"labels has unexpected dimensions after squeeze: {labels.shape}")
+        def _reshape_to_n1hw(tensor: torch.Tensor, name: str) -> torch.Tensor:
+            tensor = tensor.to(device=device, dtype=dtype)
+            if tensor.dim() < 2:
+                raise ValueError(f"{name} must have at least 2 dims, got {tensor.shape}")
+            H, W = tensor.shape[-2], tensor.shape[-1]
+            leading = tensor.shape[:-2]
+            if len(leading) == 0:
+                batch, channel = 1, 1
+                tensor = tensor.reshape(1, 1, H, W)
+            else:
+                batch = leading[0]
+                channel = int(math.prod(leading[1:])) if len(leading) > 1 else 1
+                tensor = tensor.reshape(batch, channel, H, W)
+            if batch != N:
+                if batch == 1:
+                    tensor = tensor.expand(N, channel, H, W)
+                else:
+                    raise ValueError(f"{name} batch ({batch}) != features batch ({N})")
+            if channel != 1:
+                tensor = tensor[:, :1]
+            return tensor.contiguous()
 
-        # Mask
+        labels = _reshape_to_n1hw(label_maps, "labels")
+
         if mask is None:
             mask = torch.ones_like(labels, device=device, dtype=dtype)
         else:
-            mask = mask.to(device=device, dtype=dtype)
-            # Apply same dimension normalization to mask
-            mask = mask.squeeze()
-            if mask.dim() == 2:
-                mask = mask.unsqueeze(0).unsqueeze(0)
-            elif mask.dim() == 3:
-                mask = mask.unsqueeze(1)
-            elif mask.dim() == 4:
-                if mask.shape[1] != 1:
-                    mask = mask[:, 0:1, :, :]
+            mask = _reshape_to_n1hw(mask, "mask")
 
         # ------ Resize labels and mask to (out_h, out_w) ------
         H_label, W_label = labels.shape[-2], labels.shape[-1]
