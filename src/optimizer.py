@@ -98,21 +98,31 @@ class SteepestDescentOptimizer(nn.Module):
         else:
             mask = mask.to(dtype=dtype, device=device)
 
-        # If label spatial size does not match feature grid (H_feat,W_feat), resize labels & mask
-        H_label, W_label = labels.shape[-2], labels.shape[-1]
-        if (H_label != H_feat) or (W_label != W_feat):
-            # resize to (H_feat, W_feat). Use bilinear for soft heatmaps; align_corners=False for stability.
-            labels = F.interpolate(labels, size=(H_feat, W_feat), mode='bilinear', align_corners=False)
-            mask = F.interpolate(mask, size=(H_feat, W_feat), mode='bilinear', align_corners=False)
-            # If labels represent a probability map, renormalize per sample so sums to 1
-            lab_flat = labels.view(N, -1)
-            lab_sum = lab_flat.sum(dim=1, keepdim=True)
-            lab_sum = lab_sum + (lab_sum == 0.).float()  # avoid zeros
-            labels = (lab_flat / lab_sum).view(N, 1, H_feat, W_feat)
+            # If label spatial size does not match the expected unfolded grid, resize labels & mask
+            H_label, W_label = labels.shape[-2], labels.shape[-1]
 
-        # Unify shapes and flatten labels/mask
-        labels_flat = labels.view(N, -1)  # (N, L)
-        mask_flat = mask.view(N, -1)      # (N, L)
+            # compute unfold output spatial size (number of locations L) for the given filter_size & padding used below
+            pad = self.filter_size // 2
+            # output spatial dims produced by F.unfold with stride=1
+            out_h = H_feat + 2 * pad - self.filter_size + 1
+            out_w = W_feat + 2 * pad - self.filter_size + 1
+
+            # If the provided label maps are not already the unfolded spatial size, resize them to (out_h, out_w)
+            if (H_label != out_h) or (W_label != out_w):
+                # Resize by bilinear (labels are soft heatmaps); align_corners=False for stability
+                labels = F.interpolate(labels, size=(out_h, out_w), mode='bilinear', align_corners=False)
+                mask = F.interpolate(mask, size=(out_h, out_w), mode='bilinear', align_corners=False)
+
+                # If labels represent a probability map, renormalize per sample so sums to 1
+                lab_flat = labels.view(N, -1)
+                lab_sum = lab_flat.sum(dim=1, keepdim=True)
+                # avoid divide-by-zero
+                lab_sum = lab_sum + (lab_sum == 0.).float()
+                labels = (lab_flat / lab_sum).view(N, 1, out_h, out_w)
+
+            # Now flatten labels/mask (their flattened length L matches unfold L)
+            labels_flat = labels.view(N, -1)  # (N, L)
+            mask_flat = mask.view(N, -1)      # (N, L)
 
         # Precompute unfolded feature patches for efficient gradient and Hv computations.
         pad = self.filter_size // 2
