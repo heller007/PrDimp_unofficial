@@ -154,12 +154,13 @@ def train_prdimp(
             # Forward with AMP
             optimizer.zero_grad()
             with torch.amp.autocast('cuda'):
-                while template_label_maps.dim() > 4:
-                    template_label_maps = template_label_maps.squeeze(2)
-                if template_label_maps.dim() == 3:
-                    template_label_maps = template_label_maps.unsqueeze(1)
-
                 losses = model(template, search, template_label_maps, srch_gt)
+
+                # reduce any non-scalar outputs (e.g., from DataParallel) to scalars
+                reduced_losses = {}
+                for name, val in losses.items():
+                    reduced_losses[name] = val.mean() if val.dim() > 0 else val
+                losses = reduced_losses
 
                 losses["loss_total"] = _sanitize_loss("loss_total", losses["loss_total"])
                 losses["loss_tcr"] = _sanitize_loss("loss_tcr", losses["loss_tcr"])
