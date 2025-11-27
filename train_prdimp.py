@@ -130,7 +130,8 @@ def train_prdimp(
                     tpl_label_maps.append(g)
 
                 tpl_label_maps = torch.stack(tpl_label_maps, dim=0)  # (N,1,Hf,Wf)
-                template_label_maps = tpl_label_maps
+
+            template_label_maps = tpl_label_maps
 
             # Forward with AMP
             optimizer.zero_grad()
