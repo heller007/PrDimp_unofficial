@@ -233,7 +233,8 @@ class GOT10kTrainDataset(Dataset):
         size: (w,h) box size in pixels
         """
         cx, cy = center
-        w, h = size
+        w = max(1.0, float(size[0]))
+        h = max(1.0, float(size[1]))
         left = cx - w/2.0
         top = cy - h/2.0
         right = cx + w/2.0
@@ -282,8 +283,8 @@ class GOT10kTrainDataset(Dataset):
         # scale jitter (multiplicative)
         # sample a log-uniform scale in [1/(1+jitter), 1+jitter] approximately
         scale = math.exp((self.rng.random() * 2.0 - 1.0) * math.log(1.0 + jitter))
-        new_w = w * scale
-        new_h = h * scale
+        new_w = max(1.0, float(w * scale))
+        new_h = max(1.0, float(h * scale))
     
         new_cx = cx + dx
         new_cy = cy + dy
@@ -382,8 +383,7 @@ class GOT10kTrainDataset(Dataset):
         # common tracker practice: crop a square region around target with context factor (1 + context)
         def make_crop_box(box_xywh, context=2.0):
             cx, cy, w, h = box_xywh
-            # use max(w,h)
-            s = max(w, h) * context
+            s = max(1.0, max(w, h) * context)
             return [cx, cy, s, s]
 
         template_crop = make_crop_box(t_box_j, context=2.0)
