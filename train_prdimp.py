@@ -52,10 +52,18 @@ def train_prdimp(
 ):
 
     cudnn.benchmark = True
-
     os.makedirs(save_dir, exist_ok=True)
     log_path = log_file or os.path.join(save_dir, "training.log")
     open(log_path, "w").close()
+
+    def _sanitize_loss(name: str, value: torch.Tensor) -> torch.Tensor:
+        if not torch.isfinite(value):
+            msg = f"[WARN] {name} became non-finite (value={value.item()}). Clamping to 0."
+            print(msg)
+            with open(log_path, "a") as lf:
+                lf.write(msg + "\n")
+            return torch.zeros_like(value)
+        return value
 
     # --------------------------------------------------------
     # Dataset
