@@ -15,6 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from typing import Optional
+import torch.backends.cudnn as cudnn
 
 from prdimp50 import PrDiMP50
 from data.got10k_dataset import GOT10kTrainDataset, got10k_collate
@@ -50,6 +51,8 @@ def train_prdimp(
     log_interval: int = 20,
 ):
 
+    cudnn.benchmark = True
+
     os.makedirs(save_dir, exist_ok=True)
     log_path = log_file or os.path.join(save_dir, "training.log")
     open(log_path, "w").close()
@@ -75,7 +78,9 @@ def train_prdimp(
         shuffle=True,
         collate_fn=got10k_collate,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
+        persistent_workers=num_workers > 0,
+        prefetch_factor=2 if num_workers > 0 else None
     )
     print(f"[INFO] Loaded {len(dataset)} samples.")
 
@@ -83,7 +88,10 @@ def train_prdimp(
     # Model
     # --------------------------------------------------------
     model = PrDiMP50().to(device)
-    print(f"[INFO] Model initialized on {device}")
+    if torch.cuda.device_count() > 1 and device.startswith("cuda"):
+        model = nn.DataParallel(model)
+        print(f"[INFO] Using {torch.cuda.device_count()} GPUs via DataParallel")
+    model_core = model.module if isinstance(model, nn.DataParallel) else model
 
     # --------------------------------------------------------
     # Optimizer
@@ -122,26 +130,17 @@ def train_prdimp(
 
             # Convert GT (cx,cy,w,h) → Gaussian label map for template features
             with torch.no_grad():
-                tpl_feat = model.extract_classification_features(template)
+                tpl_feat = model_core.extract_classification_features(template)
                 _, _, Hf, Wf = tpl_feat.shape
 
-                xs = torch.arange(Wf, device=device).float().view(1,1,1,Wf)
-                ys = torch.arange(Hf, device=device).float().view(1,1,Hf,1)
+                xs = torch.arange(Wf, device=device).view(1,1,1,Wf).float()
+                ys = torch.arange(Hf, device=device).view(1,1,Hf,1).float()
 
-                tpl_label_maps = []
                 sigma = 2.0
-
-                for i in range(Ntpl):
-                    cx, cy, _, _ = tpl_gt[i]  # in template-patch pixel coords
-                    cx = cx / template.shape[3] * Wf
-                    cy = cy / template.shape[2] * Hf
-
-                    g = torch.exp(-((xs - cx)**2 + (ys - cy)**2) / (2 * sigma**2))
-                    g = g / g.sum()
-                    tpl_label_maps.append(g)
-
-                tpl_label_maps = torch.stack(tpl_label_maps, dim=0)  # (N,1,Hf,Wf)
-
+                tpl_label_maps = torch.exp(-(((xs - (tpl_gt[:,0].view(-1,1,1,1) / template.shape[3] * Wf))**2 +
+                                              (ys - (tpl_gt[:,1].view(-1,1,1,1) / template.shape[2] * Hf))**2)
+                                             / (2 * sigma * sigma)))
+                tpl_label_maps = tpl_label_maps / (tpl_label_maps.view(Ntpl, -1).sum(dim=1, keepdim=True).view(Ntpl,1,1,1) + 1e-12)
             template_label_maps = tpl_label_maps
 
             # Forward with AMP
@@ -152,12 +151,7 @@ def train_prdimp(
                 if template_label_maps.dim() == 3:
                     template_label_maps = template_label_maps.unsqueeze(1)
 
-                losses = model.forward_train(
-                    template_images=template,
-                    search_images=search,
-                    template_label_maps=template_label_maps,
-                    search_gt_boxes=srch_gt
-                )
+                losses = model(template, search, template_label_maps, srch_gt)
 
                 losses["loss_total"] = _sanitize_loss("loss_total", losses["loss_total"])
                 losses["loss_tcr"] = _sanitize_loss("loss_tcr", losses["loss_tcr"])
@@ -197,8 +191,9 @@ def train_prdimp(
         #       f"Time = {time.time() - t0:.1f}s\n")
 
         # Save checkpoint
+        ckpt_state = model_core.state_dict()
         ckpt_path = os.path.join(save_dir, f"prdimp50_epoch{epoch:03d}.pth")
-        save_checkpoint(model, optimizer, epoch, ckpt_path)
+        save_checkpoint(model_core, optimizer, epoch, ckpt_path)
 
     print("\n[INFO] Training finished successfully!\n")
 

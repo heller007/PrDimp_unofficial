@@ -234,3 +234,9 @@ class PrDiMP50(nn.Module):
         feat = self.extract_classification_features(search_image)
         score = self.apply_filter(feat, filter_w)
         return score
+
+    # --------------------------------------------------------
+    # Forward Pass for DataParallel
+    # --------------------------------------------------------
+    def forward(self, template_images, search_images, template_label_maps, search_gt_boxes):
+        return self.forward_train(template_images, search_images, template_label_maps, search_gt_boxes)
