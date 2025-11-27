@@ -57,8 +57,8 @@ def train_prdimp(
     open(log_path, "w").close()
 
     def _sanitize_loss(name: str, value: torch.Tensor) -> torch.Tensor:
-        if not torch.isfinite(value):
-            msg = f"[WARN] {name} became non-finite (value={value.item()}). Clamping to 0."
+        if not torch.isfinite(value).all():
+            msg = f"[WARN] {name} became non-finite (value tensor contains inf/nan). Clamping to 0."
             print(msg)
             with open(log_path, "a") as lf:
                 lf.write(msg + "\n")
