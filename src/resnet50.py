@@ -17,7 +17,7 @@ Notes:
 from typing import Optional, List, Dict
 import torch
 import torch.nn as nn
-from torchvision import models
+from torchvision.models import resnet50, ResNet50_Weights
 
 class ResNet50Backbone(nn.Module):
     def __init__(self,
@@ -41,7 +41,8 @@ class ResNet50Backbone(nn.Module):
         self.use_norm = use_norm
 
         # Load torchvision resnet50
-        resnet = models.resnet50(pretrained=pretrained)
+        weights = ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
+        resnet = resnet50(weights=weights)
 
         # Build the stem and layers as modular blocks
         self.stem = nn.Sequential(

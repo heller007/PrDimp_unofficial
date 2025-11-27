@@ -47,6 +47,7 @@ def train_prdimp(
     num_epochs=10,
     device="cuda",
     log_file: Optional[str] = None,
+    log_interval: int = 20,
 ):
 
     os.makedirs(save_dir, exist_ok=True)
@@ -90,7 +91,7 @@ def train_prdimp(
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     # AMP scaler
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
 
     # --------------------------------------------------------
     # Training loop
@@ -103,6 +104,8 @@ def train_prdimp(
         epoch_tcr = 0.0
         epoch_bbr = 0.0
         t0 = time.time()
+
+        num_batches = len(loader)
 
         for step, batch in enumerate(loader):
 
@@ -143,7 +146,7 @@ def train_prdimp(
 
             # Forward with AMP
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 while template_label_maps.dim() > 4:
                     template_label_maps = template_label_maps.squeeze(2)
                 if template_label_maps.dim() == 3:
@@ -167,7 +170,16 @@ def train_prdimp(
             epoch_loss += total_loss.item()
             epoch_tcr += losses["loss_tcr"].item()
             epoch_bbr += losses["loss_bbr"].item()
-        num_batches = len(loader)
+
+            if ((step + 1) % log_interval == 0) or (step + 1 == num_batches):
+                prog_total = epoch_loss / (step + 1)
+                prog_tcr = epoch_tcr / (step + 1)
+                prog_bbr = epoch_bbr / (step + 1)
+                progress_line = (f"[Epoch {epoch:02d} | Step {step+1:05d}/{num_batches:05d}] "
+                                 f"Total={prog_total:.4f}  TCR={prog_tcr:.4f}  BBR={prog_bbr:.4f}")
+                print(progress_line)
+                with open(log_path, "a") as lf:
+                    lf.write(progress_line + "\n")
         avg_loss = epoch_loss / num_batches
         avg_tcr = epoch_tcr / num_batches
         avg_bbr = epoch_bbr / num_batches
