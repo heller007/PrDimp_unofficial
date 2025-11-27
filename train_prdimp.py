@@ -134,27 +134,16 @@ def train_prdimp(
             # Forward with AMP
             optimizer.zero_grad()
             with torch.cuda.amp.autocast():
-                # FIX LABEL MAPS SHAPE (remove accidental extra dims)
-                # FIX LABEL MAPS SHAPE (remove accidental extra dims)
-                # label_maps should be (N,1,Hf,Wf)
-                template_label_maps = template_label_maps.squeeze(2)   # remove C=1 or D=1 dim if present
-                template_label_maps = template_label_maps.squeeze(2)   # second squeeze in case shape is (N,1,1,Hf,Wf)
-                # --- sanitize template_label_maps before passing to model.forward_train ---
-                # make sure template_label_maps is float and on correct device
-                template_label_maps = template_label_maps.to(device=device, dtype=template_label_maps.dtype)
-
-                # Collapse any extra singleton dims until it is 4D (N,1,H,W)
+                template_label_maps = tpl_label_maps
                 while template_label_maps.dim() > 4:
                     template_label_maps = template_label_maps.squeeze(2)
-
-                # If it ended up 3D (N,H,W) add the channel dim -> (N,1,H,W)
                 if template_label_maps.dim() == 3:
                     template_label_maps = template_label_maps.unsqueeze(1)
 
                 losses = model.forward_train(
                     template_images=template,
                     search_images=search,
-                    template_label_maps=tpl_label_maps,
+                    template_label_maps=template_label_maps,
                     search_gt_boxes=srch_gt
                 )
 
