@@ -406,16 +406,6 @@ class GOT10kTrainDataset(Dataset):
         if self.transform is not None:
             tpl_tensor = self.transform(tpl_tensor)
             srch_tensor = self.transform(srch_tensor)
-        if self.rng.random() < 0.01:  # prints occasionally
-            print("DEBUG SEQ:", seq_name, "t_idx", t_idx, "s_idx", s_idx)
-            print("orig gt (t) [xmin,ymin,w,h]:", gt_t)
-            print("template_crop center (cx,cy):", (template_crop[0], template_crop[1]), "size:", (template_crop[2], template_crop[3]))
-            print("mapped tpl_gt_in_crop:", tpl_gt_in_crop)
-            print("orig gt (s) [xmin,ymin,w,h]:", gt_s)
-            print("search_crop center (cx,cy):", (search_crop[0], search_crop[1]), "size:", (search_crop[2], search_crop[3]))
-            print("mapped srch_gt_in_crop:", srch_gt_in_crop)
-
-
         return {
             'template': tpl_tensor,            # CxHt x Wt
             'search': srch_tensor,            # CxHs x Ws

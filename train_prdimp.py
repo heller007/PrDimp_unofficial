@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from typing import Optional
 
 from prdimp50 import PrDiMP50
 from data.got10k_dataset import GOT10kTrainDataset, got10k_collate
@@ -45,7 +46,12 @@ def train_prdimp(
     weight_decay=1e-4,
     num_epochs=10,
     device="cuda",
+    log_file: Optional[str] = None,
 ):
+
+    os.makedirs(save_dir, exist_ok=True)
+    log_path = log_file or os.path.join(save_dir, "training.log")
+    open(log_path, "w").close()
 
     # --------------------------------------------------------
     # Dataset
@@ -94,6 +100,8 @@ def train_prdimp(
     for epoch in range(1, num_epochs + 1):
         model.train()
         epoch_loss = 0.0
+        epoch_tcr = 0.0
+        epoch_bbr = 0.0
         t0 = time.time()
 
         for step, batch in enumerate(loader):
@@ -157,16 +165,21 @@ def train_prdimp(
 
             # Logging
             epoch_loss += total_loss.item()
-            if step % 20 == 0:
-                print(f"[Epoch {epoch:02d} Step {step:05d}] "
-                      f"Total={total_loss.item():.4f}  "
-                      f"TCR={losses['loss_tcr'].item():.4f}  "
-                      f"BBR={losses['loss_bbr'].item():.4f}")
-
+            epoch_tcr += losses["loss_tcr"].item()
+            epoch_bbr += losses["loss_bbr"].item()
+        num_batches = len(loader)
+        avg_loss = epoch_loss / num_batches
+        avg_tcr = epoch_tcr / num_batches
+        avg_bbr = epoch_bbr / num_batches
+        line = (f"[Epoch {epoch:02d}] Total={avg_loss:.4f}  "
+                f"TCR={avg_tcr:.4f}  BBR={avg_bbr:.4f}  Time={time.time() - t0:.1f}s")
+        print(line)
+        with open(log_path, "a") as lf:
+            lf.write(line + "\n")
         # End of epoch
-        avg_loss = epoch_loss / len(loader)
-        print(f"\n[Epoch {epoch:02d}] Avg Loss = {avg_loss:.4f} | "
-              f"Time = {time.time() - t0:.1f}s\n")
+        # avg_loss = epoch_loss / len(loader)
+        # print(f"\n[Epoch {epoch:02d}] Avg Loss = {avg_loss:.4f} | "
+        #       f"Time = {time.time() - t0:.1f}s\n")
 
         # Save checkpoint
         ckpt_path = os.path.join(save_dir, f"prdimp50_epoch{epoch:03d}.pth")
