@@ -1,4 +1,75 @@
-/kaggle/working/PrDimp_unofficial/train_prdimp.py:93: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
-  scaler = torch.cuda.amp.GradScaler()
-/kaggle/working/PrDimp_unofficial/train_prdimp.py:146: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
-  with torch.cuda.amp.autocast():
+
+[INFO] Loading GOT-10k training dataset...
+[INFO] Loaded 1403359 samples.
+[INFO] Model initialized on cuda
+
+[INFO] Starting training for 50 epochs...
+
+[Epoch 01 | Step 00020/140336] Total=18.2197  TCR=14.8166  BBR=3.4031
+[Epoch 01 | Step 00040/140336] Total=12.9028  TCR=9.4411  BBR=3.4616
+[Epoch 01 | Step 00060/140336] Total=11.0066  TCR=7.5165  BBR=3.4901
+[Epoch 01 | Step 00080/140336] Total=10.0397  TCR=6.5469  BBR=3.4928
+[Epoch 01 | Step 00100/140336] Total=9.3948  TCR=5.9200  BBR=3.4748
+[Epoch 01 | Step 00120/140336] Total=8.9540  TCR=5.5126  BBR=3.4414
+[Epoch 01 | Step 00140/140336] Total=8.6561  TCR=5.2365  BBR=3.4195
+[Epoch 01 | Step 00160/140336] Total=8.4121  TCR=5.0097  BBR=3.4024
+[Epoch 01 | Step 00180/140336] Total=8.2404  TCR=4.8453  BBR=3.3951
+[Epoch 01 | Step 00200/140336] Total=8.0861  TCR=4.6995  BBR=3.3866
+[Epoch 01 | Step 00220/140336] Total=7.9509  TCR=4.5711  BBR=3.3798
+[Epoch 01 | Step 00240/140336] Total=7.8470  TCR=4.4707  BBR=3.3763
+[Epoch 01 | Step 00260/140336] Total=7.7674  TCR=4.3855  BBR=3.3818
+[Epoch 01 | Step 00280/140336] Total=7.6846  TCR=4.3065  BBR=3.3781
+[Epoch 01 | Step 00300/140336] Total=7.6138  TCR=4.2437  BBR=3.3701
+[Epoch 01 | Step 00320/140336] Total=7.5525  TCR=4.1887  BBR=3.3638
+[Epoch 01 | Step 00340/140336] Total=7.4982  TCR=4.1396  BBR=3.3587
+[Epoch 01 | Step 00360/140336] Total=7.4573  TCR=4.0971  BBR=3.3602
+[Epoch 01 | Step 00380/140336] Total=7.4169  TCR=4.0582  BBR=3.3587
+[Epoch 01 | Step 00400/140336] Total=7.3788  TCR=4.0207  BBR=3.3581
+[Epoch 01 | Step 00420/140336] Total=7.3459  TCR=3.9920  BBR=3.3539
+[Epoch 01 | Step 00440/140336] Total=7.3116  TCR=3.9591  BBR=3.3525
+[Epoch 01 | Step 00460/140336] Total=7.2784  TCR=3.9322  BBR=3.3462
+[Epoch 01 | Step 00480/140336] Total=7.2367  TCR=3.9044  BBR=3.3323
+[Epoch 01 | Step 00500/140336] Total=7.2075  TCR=3.8779  BBR=3.3296
+[Epoch 01 | Step 00520/140336] Total=7.1948  TCR=3.8674  BBR=3.3274
+[Epoch 01 | Step 00540/140336] Total=nan  TCR=3.8650  BBR=nan
+[Epoch 01 | Step 00560/140336] Total=nan  TCR=3.8445  BBR=nan
+[Epoch 01 | Step 00580/140336] Total=nan  TCR=3.8253  BBR=nan
+[Epoch 01 | Step 00600/140336] Total=nan  TCR=3.8100  BBR=nan
+[Epoch 01 | Step 00620/140336] Total=nan  TCR=3.7951  BBR=nan
+[Epoch 01 | Step 00640/140336] Total=nan  TCR=3.7832  BBR=nan
+[Epoch 01 | Step 00660/140336] Total=nan  TCR=3.7708  BBR=nan
+[Epoch 01 | Step 00680/140336] Total=nan  TCR=3.7583  BBR=nan
+[Epoch 01 | Step 00700/140336] Total=nan  TCR=3.7458  BBR=nan
+[Epoch 01 | Step 00720/140336] Total=nan  TCR=3.7349  BBR=nan
+[Epoch 01 | Step 00740/140336] Total=nan  TCR=3.7225  BBR=nan
+[Epoch 01 | Step 00760/140336] Total=nan  TCR=3.7116  BBR=nan
+[Epoch 01 | Step 00780/140336] Total=nan  TCR=3.6995  BBR=nan
+[Epoch 01 | Step 00800/140336] Total=nan  TCR=3.6906  BBR=nan
+[Epoch 01 | Step 00820/140336] Total=nan  TCR=3.6820  BBR=nan
+[Epoch 01 | Step 00840/140336] Total=nan  TCR=3.6731  BBR=nan
+[Epoch 01 | Step 00860/140336] Total=nan  TCR=3.6639  BBR=nan
+[Epoch 01 | Step 00880/140336] Total=nan  TCR=3.6530  BBR=nan
+[Epoch 01 | Step 00900/140336] Total=nan  TCR=3.6452  BBR=nan
+[Epoch 01 | Step 00920/140336] Total=nan  TCR=3.6396  BBR=nan
+[Epoch 01 | Step 00940/140336] Total=nan  TCR=3.6322  BBR=nan
+[Epoch 01 | Step 00960/140336] Total=nan  TCR=3.6250  BBR=nan
+[Epoch 01 | Step 00980/140336] Total=nan  TCR=3.6185  BBR=nan
+[Epoch 01 | Step 01000/140336] Total=nan  TCR=3.6114  BBR=nan
+[Epoch 01 | Step 01020/140336] Total=nan  TCR=3.6059  BBR=nan
+[Epoch 01 | Step 01040/140336] Total=nan  TCR=3.6001  BBR=nan
+[Epoch 01 | Step 01060/140336] Total=nan  TCR=3.5929  BBR=nan
+[Epoch 01 | Step 01080/140336] Total=nan  TCR=3.5861  BBR=nan
+[Epoch 01 | Step 01100/140336] Total=nan  TCR=3.5819  BBR=nan
+[Epoch 01 | Step 01120/140336] Total=nan  TCR=3.5778  BBR=nan
+[Epoch 01 | Step 01140/140336] Total=nan  TCR=3.5739  BBR=nan
+[Epoch 01 | Step 01160/140336] Total=nan  TCR=3.5697  BBR=nan
+[Epoch 01 | Step 01180/140336] Total=nan  TCR=3.5685  BBR=nan
+[Epoch 01 | Step 01200/140336] Total=nan  TCR=3.5660  BBR=nan
+[Epoch 01 | Step 01220/140336] Total=nan  TCR=3.5609  BBR=nan
+[Epoch 01 | Step 01240/140336] Total=nan  TCR=3.5553  BBR=nan
+[Epoch 01 | Step 01260/140336] Total=nan  TCR=3.5522  BBR=nan
+[Epoch 01 | Step 01280/140336] Total=nan  TCR=3.5496  BBR=nan
+[Epoch 01 | Step 01300/140336] Total=nan  TCR=3.5462  BBR=nan
+[Epoch 01 | Step 01320/140336] Total=nan  TCR=3.5418  BBR=nan
+[Epoch 01 | Step 01340/140336] Total=nan  TCR=3.5390  BBR=nan
+[Epoch 01 | Step 01360/140336] Total=nan  TCR=3.5336  BBR=nan

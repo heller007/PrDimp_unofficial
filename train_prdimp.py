@@ -159,6 +159,9 @@ def train_prdimp(
                     search_gt_boxes=srch_gt
                 )
 
+                losses["loss_total"] = _sanitize_loss("loss_total", losses["loss_total"])
+                losses["loss_tcr"] = _sanitize_loss("loss_tcr", losses["loss_tcr"])
+                losses["loss_bbr"] = _sanitize_loss("loss_bbr", losses["loss_bbr"])
                 total_loss = losses["loss_total"]
 
             # Backprop
